@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    component: custom-ntp-server
+  name: custom-ntp-server
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      component: custom-ntp-server
+      tier: node
+  template:
+    metadata:
+      labels:
+        component: custom-ntp-server
+        tier: node
+    spec:
+      containers:
+      - name: custom-ntp-server
+        image: alpine
+        imagePullPolicy: IfNotPresent
+        command:
+          - nsenter
+          - --target
+          - "1"
+          - --mount
+          - --uts
+          - --ipc
+          - --net
+          - --pid
+          - --
+          - sh
+          - -c
+          - |
+            sed -i 's/^#NTP=/NTP=0.pool.ntp.org/' /etc/systemd/timesyncd.conf
+            systemctl restart systemd-timesyncd
+            sleep 5
+            systemctl status systemd-timesyncd.service --no-pager -l
+            while true; do sleep 100000; done
+        resources:
+          requests:
+            cpu: 10m
+        securityContext:
+          privileged: true
+      dnsPolicy: ClusterFirst
+      hostPID: true
+      tolerations:
+      - effect: NoSchedule
+        operator: Exists
+      restartPolicy: Always
+  updateStrategy:
+    type: OnDelete
